@@ -26,12 +26,38 @@ function AdminDashboard() {
     window.location.href = "/admin-login";
   };
 
+  /* ✅ FIXED: Safe Fetch Complaints (Prevents White Screen) */
   const fetchComplaints = async () => {
-    setLoading(true);
-    const res = await fetch(`${API_URL}/api/complaints`);
-    const data = await res.json();
-    setComplaints(data);
-    setLoading(false);
+    try {
+      setLoading(true);
+
+      const res = await fetch(`${API_URL}/api/complaints`);
+
+      /* ✅ If backend error, stop */
+      if (!res.ok) {
+        throw new Error("Backend returned error");
+      }
+
+      const data = await res.json();
+
+      /* ✅ Must be array */
+      if (!Array.isArray(data)) {
+        console.log("Unexpected response:", data);
+        setComplaints([]);
+        return;
+      }
+
+      setComplaints(data);
+    } catch (err) {
+      console.error("Fetch complaints failed:", err);
+
+      alert("❌ Failed to load complaints. Please refresh.");
+
+      /* ✅ Prevent crash */
+      setComplaints([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -151,18 +177,21 @@ function AdminDashboard() {
     fetchComplaints();
   };
 
-  const filteredComplaints = complaints.filter((c) => {
-    if (activeTab === "active")
-      return (
-        c.status !== "Resolved" &&
-        c.status !== "Rejected" &&
-        c.status !== "Binned"
-      );
-    if (activeTab === "resolved") return c.status === "Resolved";
-    if (activeTab === "rejected") return c.status === "Rejected";
-    if (activeTab === "bin") return c.status === "Binned";
-    return false;
-  });
+  /* ✅ FIXED: Prevent filter crash */
+  const filteredComplaints = Array.isArray(complaints)
+    ? complaints.filter((c) => {
+        if (activeTab === "active")
+          return (
+            c.status !== "Resolved" &&
+            c.status !== "Rejected" &&
+            c.status !== "Binned"
+          );
+        if (activeTab === "resolved") return c.status === "Resolved";
+        if (activeTab === "rejected") return c.status === "Rejected";
+        if (activeTab === "bin") return c.status === "Binned";
+        return false;
+      })
+    : [];
 
   return (
     <div
