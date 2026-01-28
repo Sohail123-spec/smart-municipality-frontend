@@ -26,21 +26,17 @@ function AdminDashboard() {
     window.location.href = "/admin-login";
   };
 
-  /* ✅ FIXED: Safe Fetch Complaints (Prevents White Screen) */
+  /* ✅ Safe Fetch Complaints */
   const fetchComplaints = async () => {
     try {
       setLoading(true);
 
       const res = await fetch(`${API_URL}/api/complaints`);
 
-      /* ✅ If backend error, stop */
-      if (!res.ok) {
-        throw new Error("Backend returned error");
-      }
+      if (!res.ok) throw new Error("Backend returned error");
 
       const data = await res.json();
 
-      /* ✅ Must be array */
       if (!Array.isArray(data)) {
         console.log("Unexpected response:", data);
         setComplaints([]);
@@ -50,10 +46,7 @@ function AdminDashboard() {
       setComplaints(data);
     } catch (err) {
       console.error("Fetch complaints failed:", err);
-
       alert("❌ Failed to load complaints. Please refresh.");
-
-      /* ✅ Prevent crash */
       setComplaints([]);
     } finally {
       setLoading(false);
@@ -64,10 +57,10 @@ function AdminDashboard() {
     fetchComplaints();
   }, []);
 
+  /* ✅ Save Changes */
   const saveChanges = async () => {
     if (!selectedComplaint) return;
 
-    /* ✅ Require worker assignment before In Progress */
     if (
       selectedComplaint.status === "In Progress" &&
       !selectedComplaint.assignedWorker
@@ -141,6 +134,26 @@ function AdminDashboard() {
     }
   };
 
+  /* ✅ ✅ REQUIRED UPDATE: Permanent Delete */
+  const permanentlyDelete = async (id) => {
+    const confirmDelete = window.confirm(
+      "⚠️ Are you sure you want to permanently delete this complaint?"
+    );
+
+    if (!confirmDelete) return;
+
+    const res = await fetch(`${API_URL}/api/complaints/${id}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      alert("✅ Complaint Permanently Deleted!");
+      fetchComplaints();
+    } else {
+      alert("❌ Failed to delete complaint");
+    }
+  };
+
   /* ✅ Bulk Reject */
   const bulkReject = async () => {
     if (selectedIds.length === 0) return;
@@ -177,7 +190,7 @@ function AdminDashboard() {
     fetchComplaints();
   };
 
-  /* ✅ FIXED: Prevent filter crash */
+  /* ✅ Filter Complaints */
   const filteredComplaints = Array.isArray(complaints)
     ? complaints.filter((c) => {
         if (activeTab === "active")
@@ -206,6 +219,7 @@ function AdminDashboard() {
         Admin Dashboard
       </h1>
 
+      {/* ✅ Tabs */}
       <div style={{ textAlign: "center", marginBottom: "14px" }}>
         <button
           style={tabBtn(activeTab === "active")}
@@ -213,24 +227,28 @@ function AdminDashboard() {
         >
           Active Complaints
         </button>
+
         <button
           style={tabBtn(activeTab === "resolved")}
           onClick={() => setActiveTab("resolved")}
         >
           Resolved Complaints
         </button>
+
         <button
           style={tabBtn(activeTab === "rejected")}
           onClick={() => setActiveTab("rejected")}
         >
           Rejected Complaints
         </button>
+
         <button
           style={tabBtn(activeTab === "bin")}
           onClick={() => setActiveTab("bin")}
         >
           Bin
         </button>
+
         <button onClick={handleLogout} style={logoutBtn}>
           Logout
         </button>
@@ -248,6 +266,7 @@ function AdminDashboard() {
         </div>
       )}
 
+      {/* ✅ Complaints Table */}
       {loading ? (
         <p>Loading complaints...</p>
       ) : (
@@ -265,20 +284,18 @@ function AdminDashboard() {
                 <th style={th}>Worker Proof</th>
                 <th style={th}>Worker Time</th>
                 <th style={th}>Status</th>
+
+                {/* ✅ NEW COLUMN ONLY FOR BIN */}
+                {activeTab === "bin" && (
+                  <th style={th}>Delete</th>
+                )}
               </tr>
             </thead>
 
             <tbody>
               {filteredComplaints.map((c) => (
-                <tr
-                  key={c._id}
-                  onClick={() => {
-                    setSelectedComplaint(c);
-                    setOriginalComplaint(c);
-                  }}
-                >
-                  {/* Checkbox */}
-                  <td style={td} onClick={(e) => e.stopPropagation()}>
+                <tr key={c._id}>
+                  <td style={td}>
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(c._id)}
@@ -296,61 +313,38 @@ function AdminDashboard() {
                   <td style={td}>{c.title}</td>
                   <td style={td}>{c.category}</td>
 
-                  {/* Location */}
-                  <td style={td}>
-                    {c.ward || "Not Provided"}
-                    <br />
-                    {c.geoLocation?.lat && (
-                      <a
-                        href={`https://www.google.com/maps?q=${c.geoLocation.lat},${c.geoLocation.lng}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ fontSize: "12px", color: "blue" }}
-                      >
-                        📍 Open Map
-                      </a>
-                    )}
-                  </td>
+                  <td style={td}>{c.ward || "Not Provided"}</td>
 
                   <td style={td}>
                     {new Date(c.createdAt).toLocaleString()}
                   </td>
 
-                  {/* Citizen Proof */}
                   <td style={td}>
                     {c.image ? (
                       <img
                         src={c.image}
                         alt=""
                         style={{ ...thumb, cursor: "zoom-in" }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setZoomImage(c.image);
-                        }}
+                        onClick={() => setZoomImage(c.image)}
                       />
                     ) : (
                       "No Evidence"
                     )}
                   </td>
 
-                  {/* Worker Proof */}
                   <td style={td}>
                     {c.completionImage ? (
                       <img
                         src={c.completionImage}
                         alt=""
                         style={{ ...thumb, cursor: "zoom-in" }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setZoomImage(c.completionImage);
-                        }}
+                        onClick={() => setZoomImage(c.completionImage)}
                       />
                     ) : (
                       "No Evidence"
                     )}
                   </td>
 
-                  {/* Worker Time */}
                   <td style={td}>
                     {c.updatedAt
                       ? new Date(c.updatedAt).toLocaleString()
@@ -358,6 +352,25 @@ function AdminDashboard() {
                   </td>
 
                   <td style={td}>{c.status}</td>
+
+                  {/* ✅ Permanent Delete Button ONLY IN BIN */}
+                  {activeTab === "bin" && (
+                    <td style={td}>
+                      <button
+                        style={{
+                          padding: "6px 10px",
+                          background: "darkred",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => permanentlyDelete(c._id)}
+                      >
+                        🗑 Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -365,100 +378,7 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Details Panel */}
-      {selectedComplaint && (
-        <div style={detailsBox}>
-          <h3>Complaint Details</h3>
-
-          <p><b>ID:</b> {selectedComplaint._id}</p>
-          <p><b>Description:</b> {selectedComplaint.description}</p>
-          <p><b>Category:</b> {selectedComplaint.category}</p>
-
-          <p><b>Ward:</b> {selectedComplaint.ward || "Not Provided"}</p>
-
-          {selectedComplaint.geoLocation?.lat && (
-            <p>
-              <a
-                href={`https://www.google.com/maps?q=${selectedComplaint.geoLocation.lat},${selectedComplaint.geoLocation.lng}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                📍 View Complaint Location
-              </a>
-            </p>
-          )}
-
-          {/* Assign Worker */}
-          <div style={{ marginTop: "10px" }}>
-            <label>Assign Worker:</label>
-            <select
-              value={selectedComplaint.assignedWorker || ""}
-              onChange={(e) =>
-                setSelectedComplaint({
-                  ...selectedComplaint,
-                  assignedWorker: e.target.value,
-                })
-              }
-            >
-              <option value="">Select Worker</option>
-              {Object.entries(workersByCategory).map(([cat, worker]) => (
-                <option key={worker} value={worker}>
-                  {cat} – {worker}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status */}
-          <div style={{ marginTop: "10px" }}>
-            <label>Status:</label>
-            <select
-              value={selectedComplaint.status}
-              onChange={(e) =>
-                setSelectedComplaint({
-                  ...selectedComplaint,
-                  status: e.target.value,
-                })
-              }
-            >
-              <option>Pending</option>
-              <option>In Progress</option>
-              <option>Resolved</option>
-              <option>Rejected</option>
-            </select>
-          </div>
-
-          <button
-            onClick={saveChanges}
-            style={saveBtn}
-            disabled={
-              selectedComplaint.status === originalComplaint.status &&
-              selectedComplaint.assignedWorker === originalComplaint.assignedWorker
-            }
-          >
-            Save Changes
-          </button>
-
-          <button onClick={rejectComplaint} style={rejectBtn}>
-            Reject Complaint
-          </button>
-
-          {selectedComplaint.status === "Rejected" && (
-            <button onClick={moveToBin} style={binBtn}>
-              Move to Bin
-            </button>
-          )}
-
-          <button
-            onClick={() => setSelectedComplaint(null)}
-            style={closeBtn}
-          >
-            Close
-          </button>
-        </div>
-      )}
-
-      {/* Image Zoom */}
+      {/* ✅ Image Zoom */}
       {zoomImage && (
         <div style={zoomOverlay} onClick={() => setZoomImage(null)}>
           <img src={zoomImage} alt="zoom" style={zoomImageStyle} />
@@ -478,12 +398,7 @@ const tableStyle = { width: "100%", borderCollapse: "collapse" };
 const th = { border: "1px solid #ccc", padding: "10px", background: "#f5f5f5" };
 const td = { border: "1px solid #ddd", padding: "10px" };
 const thumb = { width: "60px", borderRadius: "6px" };
-const detailsBox = {
-  marginTop: "20px",
-  padding: "16px",
-  background: "#fff",
-  borderRadius: "10px",
-};
+
 const tabBtn = (a) => ({
   padding: "8px 14px",
   margin: "0 6px",
@@ -492,6 +407,7 @@ const tabBtn = (a) => ({
   border: "none",
   borderRadius: "6px",
 });
+
 const logoutBtn = {
   marginLeft: "10px",
   padding: "8px 14px",
@@ -500,38 +416,23 @@ const logoutBtn = {
   border: "none",
   borderRadius: "6px",
 };
-const saveBtn = {
-  marginTop: "12px",
-  padding: "8px 14px",
-  background: "#1976d2",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-};
+
 const rejectBtn = {
-  marginLeft: "10px",
   padding: "8px 14px",
   background: "#d32f2f",
   color: "#fff",
   border: "none",
   borderRadius: "6px",
 };
+
 const binBtn = {
-  marginLeft: "10px",
   padding: "8px 14px",
   background: "#616161",
   color: "#fff",
   border: "none",
   borderRadius: "6px",
 };
-const closeBtn = {
-  marginLeft: "10px",
-  padding: "8px 14px",
-  background: "#555",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-};
+
 const zoomOverlay = {
   position: "fixed",
   inset: 0,
@@ -540,6 +441,7 @@ const zoomOverlay = {
   justifyContent: "center",
   alignItems: "center",
 };
+
 const zoomImageStyle = { maxWidth: "90%", maxHeight: "90%" };
 
 export default AdminDashboard;
