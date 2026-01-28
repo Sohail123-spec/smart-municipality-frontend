@@ -4,9 +4,11 @@ import { API_URL } from "./config";
 
 function AdminDashboard() {
   const [complaints, setComplaints] = useState([]);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [zoomImage, setZoomImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("active");
+  const [originalComplaint, setOriginalComplaint] = useState(null);
 
   /* ✅ multi-select state */
   const [selectedIds, setSelectedIds] = useState([]);
@@ -55,73 +57,84 @@ function AdminDashboard() {
     fetchComplaints();
   }, []);
 
-  /* ✅ Reject Complaint */
-  const rejectComplaint = async (id) => {
-    await fetch(`${API_URL}/api/complaints/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "Rejected" }),
-    });
+  /* ✅ Save Changes */
+  const saveChanges = async () => {
+    if (!selectedComplaint) return;
 
-    fetchComplaints();
-  };
+    if (
+      selectedComplaint.status === "In Progress" &&
+      !selectedComplaint.assignedWorker
+    ) {
+      alert("⚠️ Assign a worker before marking In Progress");
+      return;
+    }
 
-  /* ✅ Move Complaint To Bin */
-  const moveToBin = async (id) => {
-    await fetch(`${API_URL}/api/complaints/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "Binned" }),
-    });
-
-    fetchComplaints();
-  };
-
-  /* ✅ Permanent Delete Single Complaint */
-  const permanentlyDelete = async (id) => {
-    const confirmDelete = window.confirm(
-      "⚠️ Are you sure you want to permanently delete this complaint?"
+    const res = await fetch(
+      `${API_URL}/api/complaints/${selectedComplaint._id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: selectedComplaint.status,
+          assignedWorker: selectedComplaint.assignedWorker,
+        }),
+      }
     );
 
-    if (!confirmDelete) return;
-
-    try {
-      const res = await fetch(`${API_URL}/api/complaints/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!res.ok) throw new Error();
-
-      alert("✅ Complaint Permanently Deleted!");
+    if (res.ok) {
+      alert("Updated successfully");
+      setSelectedComplaint(null);
       fetchComplaints();
-    } catch (err) {
-      alert("❌ Failed to delete complaint");
+    } else {
+      alert("Failed to update");
     }
   };
 
-  /* ✅ BULK MOVE TO BIN */
-  const bulkMoveToBin = async () => {
-    if (selectedIds.length === 0) return;
+  /* ✅ Reject Complaint */
+  const rejectComplaint = async () => {
+    if (!selectedComplaint) return;
 
-    await Promise.all(
-      selectedIds.map((id) =>
-        fetch(`${API_URL}/api/complaints/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "Binned" }),
-        })
-      )
+    const res = await fetch(
+      `${API_URL}/api/complaints/${selectedComplaint._id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Rejected" }),
+      }
     );
 
-    alert("✅ Selected Complaints Moved to Bin");
-    setSelectedIds([]);
-    fetchComplaints();
+    if (res.ok) {
+      alert("Complaint rejected");
+      setSelectedComplaint(null);
+      fetchComplaints();
+    } else {
+      alert("Failed to reject");
+    }
   };
 
-  /* ✅ BULK REJECT */
+  /* ✅ Move Complaint To Bin */
+  const moveToBin = async () => {
+    if (!selectedComplaint) return;
+
+    const res = await fetch(
+      `${API_URL}/api/complaints/${selectedComplaint._id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Binned" }),
+      }
+    );
+
+    if (res.ok) {
+      alert("Moved to Bin");
+      setSelectedComplaint(null);
+      fetchComplaints();
+    } else {
+      alert("Failed to move to bin");
+    }
+  };
+
+  /* ✅ Bulk Reject */
   const bulkReject = async () => {
     if (selectedIds.length === 0) return;
 
@@ -135,53 +148,78 @@ function AdminDashboard() {
       )
     );
 
-    alert("✅ Selected Complaints Rejected");
     setSelectedIds([]);
     fetchComplaints();
   };
 
-  /* ✅ ✅ NEW FEATURE: BULK PERMANENT DELETE (BIN TAB ONLY) */
+  /* ✅ Bulk Move To Bin */
+  const bulkMoveToBin = async () => {
+    if (selectedIds.length === 0) return;
+
+    await Promise.all(
+      selectedIds.map((id) =>
+        fetch(`${API_URL}/api/complaints/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "Binned" }),
+        })
+      )
+    );
+
+    setSelectedIds([]);
+    fetchComplaints();
+  };
+
+  /* ✅ ✅ NEW: BULK PERMANENT DELETE (BIN ONLY) */
   const bulkPermanentDelete = async () => {
     if (selectedIds.length === 0) return;
 
-    const confirmBulk = window.confirm(
-      `⚠️ Permanently delete ${selectedIds.length} complaints?\nThis cannot be undone!`
+    const confirmDelete = window.confirm(
+      `⚠️ Permanently delete ${selectedIds.length} complaints?\nThis cannot be undone.`
     );
 
-    if (!confirmBulk) return;
+    if (!confirmDelete) return;
 
-    try {
-      await Promise.all(
-        selectedIds.map((id) =>
-          fetch(`${API_URL}/api/complaints/${id}`, {
-            method: "DELETE",
-          })
-        )
-      );
+    await Promise.all(
+      selectedIds.map((id) =>
+        fetch(`${API_URL}/api/complaints/${id}`, {
+          method: "DELETE",
+        })
+      )
+    );
 
-      alert("✅ Selected Complaints Permanently Deleted!");
-      setSelectedIds([]);
-      fetchComplaints();
-    } catch (err) {
-      alert("❌ Bulk delete failed");
+    alert("✅ Selected complaints permanently deleted!");
+
+    setSelectedIds([]);
+    fetchComplaints();
+  };
+
+  /* ✅ ✅ NEW: SELECT ALL BIN COMPLAINTS */
+  const selectAllInBin = () => {
+    const binIds = filteredComplaints.map((c) => c._id);
+
+    if (selectedIds.length === binIds.length) {
+      setSelectedIds([]); // unselect all
+    } else {
+      setSelectedIds(binIds); // select all
     }
   };
 
   /* ✅ Filter Complaints */
-  const filteredComplaints = complaints.filter((c) => {
-    if (activeTab === "active")
-      return (
-        c.status !== "Resolved" &&
-        c.status !== "Rejected" &&
-        c.status !== "Binned"
-      );
-
-    if (activeTab === "resolved") return c.status === "Resolved";
-    if (activeTab === "rejected") return c.status === "Rejected";
-    if (activeTab === "bin") return c.status === "Binned";
-
-    return false;
-  });
+  const filteredComplaints = Array.isArray(complaints)
+    ? complaints.filter((c) => {
+        if (activeTab === "active")
+          return (
+            c.status !== "Resolved" &&
+            c.status !== "Rejected" &&
+            c.status !== "Binned"
+          );
+        if (activeTab === "resolved") return c.status === "Resolved";
+        if (activeTab === "rejected") return c.status === "Rejected";
+        if (activeTab === "bin") return c.status === "Binned";
+        return false;
+      })
+    : [];
 
   return (
     <div
@@ -201,19 +239,15 @@ function AdminDashboard() {
         <button style={tabBtn(activeTab === "active")} onClick={() => setActiveTab("active")}>
           Active Complaints
         </button>
-
         <button style={tabBtn(activeTab === "resolved")} onClick={() => setActiveTab("resolved")}>
-          Resolved
+          Resolved Complaints
         </button>
-
         <button style={tabBtn(activeTab === "rejected")} onClick={() => setActiveTab("rejected")}>
-          Rejected
+          Rejected Complaints
         </button>
-
         <button style={tabBtn(activeTab === "bin")} onClick={() => setActiveTab("bin")}>
           Bin
         </button>
-
         <button onClick={handleLogout} style={logoutBtn}>
           Logout
         </button>
@@ -221,9 +255,12 @@ function AdminDashboard() {
 
       {/* ✅ Bulk Actions */}
       {selectedIds.length > 0 && (
-        <div style={{ marginBottom: "12px", textAlign: "center" }}>
+        <div style={{ marginBottom: "10px" }}>
           {activeTab === "bin" ? (
-            <button style={deleteBtn} onClick={bulkPermanentDelete}>
+            <button
+              style={{ ...binBtn, background: "darkred" }}
+              onClick={bulkPermanentDelete}
+            >
               🗑 Permanently Delete Selected
             </button>
           ) : (
@@ -231,7 +268,6 @@ function AdminDashboard() {
               <button style={rejectBtn} onClick={bulkReject}>
                 Reject Selected
               </button>
-
               <button style={binBtn} onClick={bulkMoveToBin}>
                 Move Selected to Bin
               </button>
@@ -240,7 +276,7 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* ✅ Complaints Table */}
+      {/* ✅ Complaint Table */}
       {loading ? (
         <p>Loading complaints...</p>
       ) : (
@@ -248,20 +284,43 @@ function AdminDashboard() {
           <table style={tableStyle}>
             <thead>
               <tr>
-                <th style={th}></th>
+                {/* ✅ Select All Checkbox Only In Bin */}
+                <th style={th}>
+                  {activeTab === "bin" && (
+                    <input
+                      type="checkbox"
+                      onChange={selectAllInBin}
+                      checked={
+                        filteredComplaints.length > 0 &&
+                        selectedIds.length === filteredComplaints.length
+                      }
+                    />
+                  )}
+                </th>
+
                 <th style={th}>ID</th>
                 <th style={th}>Title</th>
-                <th style={th}>Ward</th>
+                <th style={th}>Category</th>
+                <th style={th}>Location</th>
+                <th style={th}>Submitted At</th>
+                <th style={th}>Citizen Proof</th>
+                <th style={th}>Worker Proof</th>
+                <th style={th}>Worker Time</th>
                 <th style={th}>Status</th>
-
-                {activeTab === "bin" && <th style={th}>Delete</th>}
               </tr>
             </thead>
 
             <tbody>
               {filteredComplaints.map((c) => (
-                <tr key={c._id}>
-                  <td style={td}>
+                <tr
+                  key={c._id}
+                  onClick={() => {
+                    setSelectedComplaint(c);
+                    setOriginalComplaint(c);
+                  }}
+                >
+                  {/* Checkbox */}
+                  <td style={td} onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(c._id)}
@@ -277,20 +336,53 @@ function AdminDashboard() {
 
                   <td style={td}>{c._id}</td>
                   <td style={td}>{c.title}</td>
-                  <td style={td}>{c.ward}</td>
-                  <td style={td}>{c.status}</td>
+                  <td style={td}>{c.category}</td>
 
-                  {/* ✅ Single Delete Button Only In Bin */}
-                  {activeTab === "bin" && (
-                    <td style={td}>
-                      <button
-                        style={deleteBtnSmall}
-                        onClick={() => permanentlyDelete(c._id)}
-                      >
-                        🗑 Delete
-                      </button>
-                    </td>
-                  )}
+                  <td style={td}>
+                    {c.ward || "Not Provided"}
+                  </td>
+
+                  <td style={td}>
+                    {new Date(c.createdAt).toLocaleString()}
+                  </td>
+
+                  <td style={td}>
+                    {c.image ? (
+                      <img
+                        src={c.image}
+                        alt=""
+                        style={{ ...thumb, cursor: "zoom-in" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setZoomImage(c.image);
+                        }}
+                      />
+                    ) : (
+                      "No Evidence"
+                    )}
+                  </td>
+
+                  <td style={td}>
+                    {c.completionImage ? (
+                      <img
+                        src={c.completionImage}
+                        alt=""
+                        style={{ ...thumb, cursor: "zoom-in" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setZoomImage(c.completionImage);
+                        }}
+                      />
+                    ) : (
+                      "No Evidence"
+                    )}
+                  </td>
+
+                  <td style={td}>
+                    {c.updatedAt ? new Date(c.updatedAt).toLocaleString() : "-"}
+                  </td>
+
+                  <td style={td}>{c.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -298,7 +390,7 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* ✅ Image Zoom */}
+      {/* ✅ Zoom Image */}
       {zoomImage && (
         <div style={zoomOverlay} onClick={() => setZoomImage(null)}>
           <img src={zoomImage} alt="zoom" style={zoomImageStyle} />
@@ -314,11 +406,10 @@ const tableWrapper = {
   padding: "12px",
   borderRadius: "12px",
 };
-
 const tableStyle = { width: "100%", borderCollapse: "collapse" };
 const th = { border: "1px solid #ccc", padding: "10px", background: "#f5f5f5" };
 const td = { border: "1px solid #ddd", padding: "10px" };
-
+const thumb = { width: "60px", borderRadius: "6px" };
 const tabBtn = (a) => ({
   padding: "8px 14px",
   margin: "0 6px",
@@ -327,7 +418,6 @@ const tabBtn = (a) => ({
   border: "none",
   borderRadius: "6px",
 });
-
 const logoutBtn = {
   marginLeft: "10px",
   padding: "8px 14px",
@@ -336,42 +426,22 @@ const logoutBtn = {
   border: "none",
   borderRadius: "6px",
 };
-
 const rejectBtn = {
+  marginLeft: "10px",
   padding: "8px 14px",
   background: "#d32f2f",
   color: "#fff",
   border: "none",
   borderRadius: "6px",
-  marginRight: "8px",
 };
-
 const binBtn = {
+  marginLeft: "10px",
   padding: "8px 14px",
   background: "#616161",
   color: "#fff",
   border: "none",
   borderRadius: "6px",
 };
-
-const deleteBtn = {
-  padding: "10px 18px",
-  background: "darkred",
-  color: "#fff",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-};
-
-const deleteBtnSmall = {
-  padding: "6px 10px",
-  background: "darkred",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
-
 const zoomOverlay = {
   position: "fixed",
   inset: 0,
@@ -380,10 +450,6 @@ const zoomOverlay = {
   justifyContent: "center",
   alignItems: "center",
 };
-
-const zoomImageStyle = {
-  maxWidth: "90%",
-  maxHeight: "90%",
-};
+const zoomImageStyle = { maxWidth: "90%", maxHeight: "90%" };
 
 export default AdminDashboard;
